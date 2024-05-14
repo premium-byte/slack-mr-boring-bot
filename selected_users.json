@@ -1,0 +1,11 @@
+{
+  "cron": "",
+  "teams": {
+    "team1": [
+      "John"
+    ],
+    "team2": [
+      "Pedro Silva"
+    ]
+  }
+}
