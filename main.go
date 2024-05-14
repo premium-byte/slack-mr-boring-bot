@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -20,10 +19,7 @@ var slackApi *slack.Client
 
 func main() {
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file")
-	}
+	_ = godotenv.Load()
 
 	slackToken := os.Getenv("SLACK_TOKEN")
 	slackApi = slack.New(slackToken)
@@ -40,7 +36,7 @@ func main() {
 
 	c := cron.New()
 	// Schedule the function to run daily at 9:00 AM
-	_, err = c.AddFunc("*/1 * * * *", dailyTask)
+	_, err := c.AddFunc("*/1 * * * *", dailyTask)
 	if err != nil {
 		fmt.Println("Error scheduling task:", err)
 		return
