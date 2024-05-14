@@ -40,7 +40,7 @@ func main() {
 
 	c := cron.New()
 	// Schedule the function to run daily at 9:00 AM
-	_, err := c.AddFunc("*/1 * * * *", dailyTask)
+	_, err = c.AddFunc("*/1 * * * *", dailyTask)
 	if err != nil {
 		fmt.Println("Error scheduling task:", err)
 		return
