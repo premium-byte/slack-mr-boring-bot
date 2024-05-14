@@ -1,6 +1,5 @@
 {
     "_cron": "*/1 * * * *",
-    "cron": "*/5 * * * * *",
     "teams": 
         {
             "team1": ["John","Emily"],
