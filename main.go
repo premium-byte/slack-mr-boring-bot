@@ -39,7 +39,7 @@ func main() {
 
 				c := cron.New()
 
-				err := c.AddFunc(task.Cron, func() {
+				err := c.AddFunc(getCronExpression(task.Cron), func() {
 					mu.Lock()
 					selectUserForTask(teamName, taskName)
 					mu.Unlock()
@@ -144,6 +144,14 @@ func getMessageToPublish(teamTaskMessage string, taskName string) string {
 	return generalconfiguration.Messages[taskName]
 }
 
+func getCronExpression(cronExpression string) string {
+	if cronExpression != "" {
+		return cronExpression
+	}
+
+	return generalconfiguration.DefaultCron
+}
+
 func addMemberToCurrentSelectionStorage(team string, task string, member string) {
 	if _, ok := currentSelectionStorage.Teams[team]; !ok {
 		currentSelectionStorage.Teams[team] = make(map[string]TaskSelection)
@@ -197,8 +205,9 @@ func loadGeneralConfiguration() GeneralConfiguration {
 }
 
 type GeneralConfiguration struct {
-	Messages map[string]string          `json:"messages"`
-	Teams    map[string]map[string]Task `json:"teams"`
+	DefaultCron string                     `json:"defaultCron"`
+	Messages    map[string]string          `json:"messages"`
+	Teams       map[string]map[string]Task `json:"teams"`
 }
 
 type Task struct {
