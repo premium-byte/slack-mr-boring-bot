@@ -116,6 +116,13 @@ func selectUserForTask(teamName string, taskName string) {
 
 func sendMessageToSlack(slackMessage string, member string, channel string, taskName string) {
 	messageToPublish := getMessageToPublish(slackMessage, taskName)
+
+	// WORKING: Get user by email
+	//_, err := slackApi.GetUserByEmail(member)
+	//if err != nil {
+	//	log.Fatalf("Failed to find user: %v", err)
+	//}
+
 	messageToPublish = strings.Replace(messageToPublish, "{{name}}", member, -1)
 
 	_, _, err := slackApi.PostMessage(

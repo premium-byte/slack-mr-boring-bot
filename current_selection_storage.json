@@ -1,5 +1,15 @@
 {
   "teams": {
+    "payments-zeus": {
+      "support": {
+        "members": [
+          "pedro87silva",
+          "John",
+          "Emily",
+          "Paulo"
+        ]
+      }
+    },
     "team1": {
       "daily": {
         "members": []
