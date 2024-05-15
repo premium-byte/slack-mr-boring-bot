@@ -1,0 +1,23 @@
+{
+  "teams": {
+    "team1": {
+      "daily": {
+        "members": []
+      },
+      "support": {
+        "members": [
+          "John",
+          "Emily"
+        ]
+      }
+    },
+    "team2": {
+      "daily": {
+        "members": []
+      },
+      "support": {
+        "members": []
+      }
+    }
+  }
+}

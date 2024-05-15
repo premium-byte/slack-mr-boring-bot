@@ -1,8 +1,37 @@
 {
-    "_cron": "*/1 * * * *",
+    "messages" : {
+        "daily": ":tada: *Hey Team!* :tada:\n\nGuess what? It's that time again where we pick our awesome *host for today's scrum daily*! :partying_face:\n\n:star2: *Drumroll, please...* :star2:\n\n:drum_with_drumsticks: :drum_with_drumsticks: :drum_with_drumsticks:\n\n:sparkles: *Congratulations, {{name}}!* :sparkles:\n\nYou've been chosen as our fantastic host for today! We're all excited to hear your updates and keep the energy high! :muscle: :smiley:\n\nLet's make this scrum daily amazing and have a blast while we share our progress and plans! :rocket: :balloon:\n\nCheers to another productive day, team! :tada: :raised_hands:",
+        "support" : ":tada: *Hey Team!* :tada:\n\nGuess what? It's that time again where we pick our amazing *support champion for integration tests*! :partying_face:\n\n:star2: *Drumroll, please...* :star2:\n\n:drum_with_drumsticks: :drum_with_drumsticks: :drum_with_drumsticks:\n\n:sparkles: *Congratulations, {{name}}!* :sparkles:\n\nYou've been chosen to provide support for our integration tests until the end of the day! We're all counting on your expertise and enthusiasm! :muscle: :smiley:\n\nLet's make our integration tests flawless and have a productive day! :rocket: :balloon:\n\nCheers to your dedication and hard work, team! :tada: :raised_hands:"
+    },
     "teams": 
         {
-            "team1": ["John","Emily"],
-            "team2": ["Pedro Silva","Maria Andrade"]
+            "team1": {
+                "daily": {
+                    "cron": "*/5 * * * * *",
+                    "members": ["Fábio","Ana","Maria"],
+                    "message": "",
+                    "channel": "mysuperchannel"
+                },
+                "support": {
+                    "cron": "*/10 * * * * *",
+                    "members": ["John","Emily","Paulo"],
+                    "message": "",
+                    "channel": "mysuperchannel"
+                }
+            },
+            "team2": {
+                "daily": {
+                    "cron": "*/5 * * * * *",
+                    "members": ["Francisco","André"],
+                    "message": "",
+                    "channel": "mysuperchannel"
+                },
+                "support": {
+                    "cron": "*/10 * * * * *",
+                    "members": ["Pedro Silva","Maria Andrade"],
+                    "message": "",
+                    "channel": "mysuperchannel"
+                }
+            }
         }
 }
