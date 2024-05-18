@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
-
+	"net/http"
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron"
 	"github.com/slack-go/slack"
@@ -17,8 +17,20 @@ var generalconfiguration GeneralConfiguration
 var currentSelectionStorage CurrentSelectionStorage
 var slackApi *slack.Client
 
-func main() {
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
 
+func main() {
+	http.HandleFunc("/health", healthHandler)
+
+	port := ":8089"
+	log.Printf("Starting server on port %s", port)
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatalf("Could not start server: %s\n", err.Error())
+	}
+	
 	_ = godotenv.Load()
 
 	slackToken := os.Getenv("SLACK_TOKEN")
