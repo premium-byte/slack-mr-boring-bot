@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron"
 	"github.com/slack-go/slack"
+	"google.golang.org/appengine/log"
 )
 
 var generalconfiguration GeneralConfiguration
@@ -103,7 +104,17 @@ func saveSelectedUsers(currentSelectionStorage CurrentSelectionStorage) {
 
 func selectUserForTask(teamName string, taskName string) {
 	finishedWithoutResults := true
-	for _, member := range generalconfiguration.Teams[teamName][taskName].Members {
+
+	teamMembers := generalconfiguration.Teams[teamName][taskName].Members
+	membersToSelect := generalconfiguration.Teams[teamName][taskName].Amount
+
+	if membersToSelect == 0 {
+		log.Infof("No members to select for task %s", taskName)
+		return
+	}
+
+	counter := 0
+	for _, member := range teamMembers {
 		if !strings.Contains(strings.Join(currentSelectionStorage.Teams[teamName][taskName].Members, ","), member) {
 			finishedWithoutResults = false
 			fmt.Printf("[%s] :: %s selected user %s \n", teamName, taskName, member)
@@ -111,8 +122,21 @@ func selectUserForTask(teamName string, taskName string) {
 
 			taskInfo := generalconfiguration.Teams[teamName][taskName]
 			sendMessageToSlack(taskInfo.Message, member, taskInfo.Channel, taskName)
-			break
+
+			counter++
+			if counter == membersToSelect {
+				break
+			}
 		}
+	}
+
+	if membersToSelect < counter {
+		fmt.Println("Not enough users to select. Resetting...")
+		teamTask := currentSelectionStorage.Teams[teamName][taskName]
+		teamTask.Members = []string{}
+		currentSelectionStorage.Teams[teamName][taskName] = teamTask
+		saveSelectedUsers(currentSelectionStorage)
+		return
 	}
 
 	if !finishedWithoutResults {
@@ -228,6 +252,7 @@ type Task struct {
 	Members []string `json:"members"`
 	Message string   `json:"message"`
 	Channel string   `json:"channel"`
+	Amount  int      `json:"amount"`
 }
 
 type CurrentSelectionStorage struct {

@@ -17,7 +17,8 @@
                     "cron": "",
                     "members": ["pedro87silva", "John","Emily","Paulo"],
                     "message": "",
-                    "channel": "mysuperchannel"
+                    "channel": "mysuperchannel",
+                    "amount": "2"
                 }
             },
             "payments-iris": {
@@ -31,7 +32,8 @@
                     "cron": "0 9 * * 1-5",
                     "members": ["Pedro Silva","Maria Andrade"],
                     "message": "",
-                    "channel": "mysuperchannel"
+                    "channel": "mysuperchannel",
+                    "amount": "2"
                 }
             }
         }
