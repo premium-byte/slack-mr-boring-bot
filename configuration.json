@@ -14,11 +14,11 @@
                     "channel": "mysuperchannel"
                 },
                 "support": {
-                    "cron": "",
-                    "members": ["pedro87silva", "John","Emily","Paulo"],
+                    "cron": "*/10 * * * *",
+                    "members": ["pedro87silva", "StarryNights99","MysticWanderer","PixelDreamer","GalacticWhisper","QuantumPhoenix","VelvetShadow","NebulaVoyager","EnchantedScribe","CosmicJester","LunarEcho"],
                     "message": "",
                     "channel": "mysuperchannel",
-                    "amount": "2"
+                    "amount": 3
                 }
             },
             "payments-iris": {
@@ -33,7 +33,7 @@
                     "members": ["Pedro Silva","Maria Andrade"],
                     "message": "",
                     "channel": "mysuperchannel",
-                    "amount": "2"
+                    "amount": 2
                 }
             }
         }

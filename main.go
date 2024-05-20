@@ -5,34 +5,23 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
-	"net/http"
+	"time"
+
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron"
 	"github.com/slack-go/slack"
-	"google.golang.org/appengine/log"
 )
 
 var generalconfiguration GeneralConfiguration
 var currentSelectionStorage CurrentSelectionStorage
 var slackApi *slack.Client
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-}
-
 func main() {
-	http.HandleFunc("/health", healthHandler)
 
-	port := ":8089"
-	log.Printf("Starting server on port %s", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
-		log.Fatalf("Could not start server: %s\n", err.Error())
-	}
-	
 	_ = godotenv.Load()
 
 	slackToken := os.Getenv("SLACK_TOKEN")
@@ -103,52 +92,79 @@ func saveSelectedUsers(currentSelectionStorage CurrentSelectionStorage) {
 }
 
 func selectUserForTask(teamName string, taskName string) {
-	finishedWithoutResults := true
+	fmt.Println("Selecting user for task", taskName)
 
 	teamMembers := generalconfiguration.Teams[teamName][taskName].Members
 	membersToSelect := generalconfiguration.Teams[teamName][taskName].Amount
 
+	if len(teamMembers) < membersToSelect {
+		log.Printf("Not enough members to select for task %s", taskName)
+		return
+	}
+
 	if membersToSelect == 0 {
-		log.Infof("No members to select for task %s", taskName)
+		log.Printf("No members to select for task %s", taskName)
 		return
 	}
 
 	counter := 0
-	for _, member := range teamMembers {
-		if !strings.Contains(strings.Join(currentSelectionStorage.Teams[teamName][taskName].Members, ","), member) {
-			finishedWithoutResults = false
-			fmt.Printf("[%s] :: %s selected user %s \n", teamName, taskName, member)
-			addMemberToCurrentSelectionStorage(teamName, taskName, member)
+	listOfUsers := []string{}
+	currentSelectedMembers := currentSelectionStorage.Teams[teamName][taskName].Members
+	availableMembers := Difference(teamMembers, currentSelectedMembers)
 
-			taskInfo := generalconfiguration.Teams[teamName][taskName]
-			sendMessageToSlack(taskInfo.Message, member, taskInfo.Channel, taskName)
+	Shuffle(availableMembers)
+	for _, member := range availableMembers {
+		fmt.Printf("[%s] :: %s selected user %s \n", teamName, taskName, member)
+		listOfUsers = append(listOfUsers, member)
 
-			counter++
-			if counter == membersToSelect {
-				break
-			}
+		counter++
+		if counter == membersToSelect {
+			break
 		}
 	}
 
-	if membersToSelect < counter {
-		fmt.Println("Not enough users to select. Resetting...")
-		teamTask := currentSelectionStorage.Teams[teamName][taskName]
-		teamTask.Members = []string{}
-		currentSelectionStorage.Teams[teamName][taskName] = teamTask
-		saveSelectedUsers(currentSelectionStorage)
+	if len(listOfUsers) == membersToSelect {
+
+		for _, member := range listOfUsers {
+			addMemberToCurrentSelectionStorage(teamName, taskName, member)
+			taskInfo := generalconfiguration.Teams[teamName][taskName]
+			sendMessageToSlack(taskInfo.Message, member, taskInfo.Channel, taskName)
+		}
 		return
 	}
 
-	if !finishedWithoutResults {
-		return
-	}
-
-	fmt.Println("All users have been selected. Resetting...")
+	// else if counter < membersToSelect
+	fmt.Println("Not enough users to select. Resetting...")
 	teamTask := currentSelectionStorage.Teams[teamName][taskName]
 	teamTask.Members = []string{}
 	currentSelectionStorage.Teams[teamName][taskName] = teamTask
-	saveSelectedUsers(currentSelectionStorage)
-	//	selectUser() // test this better
+	saveSelectedUsers(currentSelectionStorage) // clean selection
+	selectUserForTask(teamName, taskName)
+}
+
+func Shuffle(slice []string) {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	rand.Shuffle(len(slice), func(i, j int) {
+		slice[i], slice[j] = slice[j], slice[i]
+	})
+}
+
+func Difference(A, B []string) []string {
+	// Create a map from list B
+	bMap := make(map[string]struct{})
+	for _, item := range B {
+		bMap[item] = struct{}{}
+	}
+
+	// Find elements in A that are not in B
+	var diff []string
+	for _, item := range A {
+		if _, found := bMap[item]; !found {
+			diff = append(diff, item)
+		}
+	}
+
+	return diff
 }
 
 func sendMessageToSlack(slackMessage string, member string, channel string, taskName string) {

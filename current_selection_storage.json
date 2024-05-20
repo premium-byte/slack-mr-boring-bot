@@ -1,8 +1,26 @@
 {
   "teams": {
+    "payments-iris": {
+      "support": {
+        "members": [
+          "Pedro Silva",
+          "Maria Andrade"
+        ]
+      }
+    },
     "payments-zeus": {
       "support": {
-        "members": []
+        "members": [
+          "EnchantedScribe",
+          "VelvetShadow",
+          "NebulaVoyager",
+          "PixelDreamer",
+          "StarryNights99",
+          "MysticWanderer",
+          "CosmicJester",
+          "QuantumPhoenix",
+          "LunarEcho"
+        ]
       }
     },
     "team1": {
