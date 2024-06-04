@@ -1,0 +1,18 @@
+{
+  "groups": {
+    "payments-support": {
+      "teams": {
+        "payments-iris-backend": [
+          "pedro87silva",
+          "Y"
+        ],
+        "payments-iris-frontend": [],
+        "payments-zeus-backend": [],
+        "payments-zeus-frontend": [
+          "E",
+          "pedro87silva"
+        ]
+      }
+    }
+  }
+}

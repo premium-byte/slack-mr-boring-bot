@@ -1,40 +1,88 @@
 {
-    "messages" : {
+    "messages": {
         "daily": ":tada: *Hey Team!* :tada:\n\nGuess what? It's that time again where we pick our awesome *host for today's scrum daily*! :partying_face:\n\n:star2: *Drumroll, please...* :star2:\n\n:drum_with_drumsticks: :drum_with_drumsticks: :drum_with_drumsticks:\n\n:sparkles: *Congratulations, <@{{name}}>!* :sparkles:\n\nYou've been chosen as our fantastic host for today! We're all excited to hear your updates and keep the energy high! :muscle: :smiley:\n\nLet's make this scrum daily amazing and have a blast while we share our progress and plans! :rocket: :balloon:\n\nCheers to another productive day, team! :tada: :raised_hands:",
-        "support" : ":tada: *Hey Team!* :tada:\n\nGuess what? It's that time again where we pick our amazing *support champion for integration tests*! :partying_face:\n\n:star2: *Drumroll, please...* :star2:\n\n:drum_with_drumsticks: :drum_with_drumsticks: :drum_with_drumsticks:\n\n:sparkles: *Congratulations, <@{{name}}>!* :sparkles:\n\nYou've been chosen to provide support for our integration tests until the end of the day! We're all counting on your expertise and enthusiasm! :muscle: :smiley:\n\nLet's make our integration tests flawless and have a productive day! :rocket: :balloon:\n\nCheers to your dedication and hard work, team! :tada: :raised_hands:"
+        "support": ":tada: *Hey Team!* :tada:\n\nGuess what? It's that time again where we pick our amazing *support champion for integration tests*! :partying_face:\n\n:star2: *Drumroll, please...* :star2:\n\n:drum_with_drumsticks: :drum_with_drumsticks: :drum_with_drumsticks:\n\n:sparkles: *Congratulations, <@{{name}}>!* :sparkles:\n\nYou've been chosen to provide support for our integration tests until the end of the day! We're all counting on your expertise and enthusiasm! :muscle: :smiley:\n\nLet's make our integration tests flawless and have a productive day! :rocket: :balloon:\n\nCheers to your dedication and hard work, team! :tada: :raised_hands:",
+        "payments-support" : ":mega: *Exciting News!* :mega:\n\nToday, we're thrilled to announce that our amazing support squad will be led by none other than {{name}}! :star2:\n\nThese superheroes are ready to tackle any challenge and make your day smoother and brighter. :woman_superhero: :man_superhero: :woman_superhero:\n\nFeel free to reach out to them for any assistance you need. They're here to help and spread some joy along the way! :smile: :+1: :sparkles:\n\nLet's give a big round of applause to {{name}}! :clap: :clap: :clap:\n\n#SupportTeam #HeroesOfTheDay #HereToHelp\n\n:rocket: :balloon: :blush:"
     },
-    "defaultCron": "0 9 * * 1-5",
-    "teams": 
-        {
-            "payments-zeus": {
-                "daily": {
-                    "cron": "0 9 * * 1-5",
-                    "members": ["Fábio","Ana","Maria"],
-                    "message": "",
-                    "channel": "mysuperchannel"
-                },
-                "support": {
-                    "cron": "*/10 * * * *",
-                    "members": ["pedro87silva", "StarryNights99","MysticWanderer","PixelDreamer","GalacticWhisper","QuantumPhoenix","VelvetShadow","NebulaVoyager","EnchantedScribe","CosmicJester","LunarEcho"],
-                    "message": "",
-                    "channel": "mysuperchannel",
-                    "amount": 3
-                }
+    "defaultCron": "0 0 9 * * 1-5",
+    "teams": {
+        "payments-zeus": {
+            "daily": {
+                "cron": "0 0 9 * * 1-5",
+                "members": [
+                    "Fábio",
+                    "Ana",
+                    "Maria"
+                ],
+                "message": "",
+                "channel": "mysuperchannel"
             },
-            "payments-iris": {
-                "daily": {
-                    "cron": "0 9 * * 1-5",
-                    "members": ["Francisco","André"],
-                    "message": "",
-                    "channel": "mysuperchannel"
-                },
-                "support": {
-                    "cron": "0 9 * * 1-5",
-                    "members": ["Pedro Silva","Maria Andrade"],
-                    "message": "",
-                    "channel": "mysuperchannel",
-                    "amount": 2
-                }
+            "support": {
+                "cron": "0 0 9 * * 1-5",
+                "members": [
+                    "pedro87silva",
+                    "StarryNights99",
+                    "MysticWanderer",
+                    "PixelDreamer",
+                    "GalacticWhisper",
+                    "QuantumPhoenix",
+                    "VelvetShadow",
+                    "NebulaVoyager",
+                    "EnchantedScribe",
+                    "CosmicJester",
+                    "LunarEcho"
+                ],
+                "message": "",
+                "channel": "mysuperchannel",
+                "amount": 3
+            }
+        },
+        "payments-iris": {
+            "daily": {
+                "cron": "0 0 9 * * 1-5",
+                "members": [
+                    "Francisco",
+                    "André"
+                ],
+                "message": "",
+                "channel": "mysuperchannel"
+            },
+            "support": {
+                "cron": "0 0 9 * * 1-5",
+                "members": [
+                    "Pedro Silva",
+                    "Maria Andrade"
+                ],
+                "message": "",
+                "channel": "mysuperchannel",
+                "amount": 2
             }
         }
+    },
+    "groups": {
+        "payments-support": {
+            "amountFromEachTeam": 1,
+            "cron": "0 0 9 * * 1-5",
+            "teams": {
+                "payments-zeus-backend": {
+                    "members" : ["A", "B", "Z"],
+                    "amount": 1
+                },
+                "payments-iris-backend": {
+                    "members" : ["C", "D", "Y"],
+                    "amount": 1
+                },
+                "payments-zeus-frontend": {
+                    "members" : ["E", "F", "W"],
+                    "amount": 1
+                },
+                "payments-iris-frontend": {
+                    "members" : ["G", "H", "I"],
+                    "amount": 1
+                }
+            },
+            "message": ":mega: *Exciting News!* :mega:\n\nToday, we're thrilled to announce that our amazing support squad will be led by none other than {{name}}! :star2:\n\nThese superheroes are ready to tackle any challenge and make your day smoother and brighter. :woman_superhero: :man_superhero: :woman_superhero:\n\nFeel free to reach out to them for any assistance you need. They're here to help and spread some joy along the way! :smile: :+1: :sparkles:\n\nLet's give a big round of applause to {{name}}! :clap: :clap: :clap:\n\n#SupportTeam #HeroesOfTheDay #HereToHelp\n\n:rocket: :balloon: :blush:",
+            "channel": "mysupportchannel"
+        }
+    }
 }

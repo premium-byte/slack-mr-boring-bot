@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 var generalconfiguration GeneralConfiguration
 var currentSelectionStorage CurrentSelectionStorage
+var currentSupportSelectionStorage CurrentSupportSelectionStorage
 var slackApi *slack.Client
 
 func main() {
@@ -29,7 +31,10 @@ func main() {
 
 	generalconfiguration = loadGeneralConfiguration()
 	currentSelectionStorage = loadCurrentSelectionStorage()
+	currentSupportSelectionStorage = loadCurrentSupportSelectionStorage()
 	defer saveSelectedUsers(currentSelectionStorage)
+
+	fmt.Println(generalconfiguration.Groups)
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -56,6 +61,29 @@ func main() {
 				c.Start()
 			}(teamName, taskName, task)
 		}
+	}
+
+	fmt.Println("Groups", generalconfiguration.Groups)
+	for supportName, supportDefinition := range generalconfiguration.Groups {
+		wg.Add(1)
+		go func(supportName string, supportDefinition SupportDefinition) {
+			defer wg.Done()
+
+			c := cron.New()
+
+			err := c.AddFunc(getCronExpression(supportDefinition.Cron), func() {
+				mu.Lock()
+				selectUsersForSupport(supportName, supportDefinition)
+				mu.Unlock()
+			})
+
+			if err != nil {
+				fmt.Println("Error scheduling Support:", err)
+				return
+			}
+
+			c.Start()
+		}(supportName, supportDefinition)
 	}
 
 	wg.Wait()
@@ -89,6 +117,85 @@ func saveSelectedUsers(currentSelectionStorage CurrentSelectionStorage) {
 		fmt.Println("Error writing selected users to file:", err)
 		return
 	}
+}
+
+// saveSelectedUsers saves the selected users to a file
+func saveSupportedSelectedUsers(currentSupportSelectionStorage CurrentSupportSelectionStorage) {
+	data, err := json.MarshalIndent(currentSupportSelectionStorage, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling selected users:", err)
+		return
+	}
+
+	err = os.WriteFile("current_support_selection_storage.json", data, 0644)
+	if err != nil {
+		fmt.Println("Error writing selected users to file:", err)
+		return
+	}
+}
+
+func selectUsersForSupport(supportName string, supportDefinition SupportDefinition) {
+	fmt.Println("Selecting users for support --> ", supportName)
+
+	users := make(map[string][]string, len(supportDefinition.Teams))
+	for teamName, teamDefinition := range supportDefinition.Teams {
+
+		if len(teamDefinition.Members) < teamDefinition.Amount {
+			log.Printf("Not enough members to select for support %s", supportName)
+			return
+		}
+
+		if teamDefinition.Amount == 0 {
+			log.Printf("No members to select for support %s", supportName)
+			break
+		}
+
+		availableMembers := Difference(teamDefinition.Members, currentSupportSelectionStorage.Groups[supportName].Teams[teamName])
+		if len(availableMembers) < teamDefinition.Amount {
+			log.Printf("Not enough members to select for support %s", supportName)
+			fmt.Println("Not enough users to select. Resetting...")
+			currentSupportSelectionStorage.Groups[supportName].Teams[teamName] = []string{}
+			saveSupportedSelectedUsers(currentSupportSelectionStorage) // clean selection
+			selectUsersForSupport(supportName, supportDefinition)
+			return
+		}
+
+		Shuffle(availableMembers)
+
+		selectedMembers := availableMembers[:teamDefinition.Amount]
+		users[teamName] = selectedMembers
+	}
+
+	var builder strings.Builder
+
+	var counter int = 0
+	for _, selectedUsers := range users {
+
+		var counter2 int = 0
+		for _, user := range selectedUsers {
+			if counter != len(users)-1 {
+				builder.WriteString("<@" + user + ">, ")
+			}
+
+			if counter == len(users)-1 && counter2 == len(selectedUsers)-1 {
+				builder.WriteString("and <@" + user + ">")
+			}
+			counter2++
+		}
+		counter++
+
+		//builder.WriteString("<" + strings.Join(selectedUsers, ">, "))
+		// TODO PS - Improve this code
+		//if counter != len(users)-1 {
+		//	builder.WriteString(">, ")
+		//}
+
+	}
+
+	fmt.Println("Selected users for support {} :: {}", supportName, builder.String())
+	message := getMessageToPublish(supportDefinition.Message, supportName)
+	sendMessageToSlack(message, builder.String(), supportDefinition.Channel, supportName)
+	addMemberToCurrentSupportSelectionStorage(supportName, users)
 }
 
 func selectUserForTask(teamName string, taskName string) {
@@ -224,12 +331,37 @@ func addMemberToCurrentSelectionStorage(team string, task string, member string)
 	saveSelectedUsers(currentSelectionStorage)
 }
 
-type Configuration struct {
-	Cron  string              `json:"cron"`
-	Teams map[string][]string `json:"teams"`
+func addMemberToCurrentSupportSelectionStorage(supportTeam string, users map[string][]string) {
+	if _, ok := currentSupportSelectionStorage.Groups[supportTeam]; !ok {
+		currentSupportSelectionStorage.Groups[supportTeam] = StoredSupportDefinition{Teams: make(map[string][]string)}
+	}
+
+	for teamName, _ := range users {
+		if _, ok := currentSupportSelectionStorage.Groups[supportTeam].Teams[teamName]; !ok {
+			currentSupportSelectionStorage.Groups[supportTeam].Teams[teamName] = []string{}
+		}
+	}
+
+	for teamName, members := range users {
+		teamTask := currentSupportSelectionStorage.Groups[supportTeam].Teams[teamName]
+		teamTask = append(teamTask, members...)
+		// Add member to the existing task
+		currentSupportSelectionStorage.Groups[supportTeam].Teams[teamName] = teamTask
+	}
+
+	saveSupportedSelectedUsers(currentSupportSelectionStorage)
 }
 
 func loadGeneralConfiguration() GeneralConfiguration {
+
+	files, err := ioutil.ReadDir(".")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range files {
+		fmt.Println(file.Name())
+	}
 
 	var generalConfiguration GeneralConfiguration
 	file, err := os.Open("configuration.json")
@@ -258,9 +390,10 @@ func loadGeneralConfiguration() GeneralConfiguration {
 }
 
 type GeneralConfiguration struct {
-	DefaultCron string                     `json:"defaultCron"`
-	Messages    map[string]string          `json:"messages"`
-	Teams       map[string]map[string]Task `json:"teams"`
+	DefaultCron string                       `json:"defaultCron"`
+	Messages    map[string]string            `json:"messages"`
+	Teams       map[string]map[string]Task   `json:"teams"`
+	Groups      map[string]SupportDefinition `json:"groups"`
 }
 
 type Task struct {
@@ -271,8 +404,29 @@ type Task struct {
 	Amount  int      `json:"amount"`
 }
 
+type SupportDefinition struct {
+	Cron               string                    `json:"cron"`
+	Teams              map[string]TeamDefinition `json:"teams"`
+	Message            string                    `json:"message"`
+	Channel            string                    `json:"channel"`
+	AmountFromEachTeam int                       `json:"amountFromEachTeam"`
+}
+
+type TeamDefinition struct {
+	Members []string `json:"members"`
+	Amount  int      `json:"amount"`
+}
+
+type StoredSupportDefinition struct {
+	Teams map[string][]string `json:"teams"`
+}
+
 type CurrentSelectionStorage struct {
 	Teams map[string]map[string]TaskSelection `json:"teams"`
+}
+
+type CurrentSupportSelectionStorage struct {
+	Groups map[string]StoredSupportDefinition `json:"groups"`
 }
 
 type TaskSelection struct {
@@ -302,6 +456,34 @@ func loadCurrentSelectionStorage() CurrentSelectionStorage {
 		// Error parsing JSON, return empty structure
 		fmt.Println("Error parsing JSON:", err)
 		return CurrentSelectionStorage{Teams: make(map[string]map[string]TaskSelection)}
+	}
+
+	return currentSelectionStorage
+}
+
+func loadCurrentSupportSelectionStorage() CurrentSupportSelectionStorage {
+
+	var currentSelectionStorage CurrentSupportSelectionStorage
+	file, err := os.Open("current_support_selection_storage.json")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		// File does not exist or error reading the file, return empty structure
+		return CurrentSupportSelectionStorage{Groups: make(map[string]StoredSupportDefinition)}
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		// Error reading file, return empty structure
+		fmt.Println("Error reading file:", err)
+		return CurrentSupportSelectionStorage{Groups: make(map[string]StoredSupportDefinition)}
+	}
+
+	err = json.Unmarshal(data, &currentSelectionStorage)
+	if err != nil {
+		// Error parsing JSON, return empty structure
+		fmt.Println("Error parsing JSON:", err)
+		return CurrentSupportSelectionStorage{Groups: make(map[string]StoredSupportDefinition)}
 	}
 
 	return currentSelectionStorage
