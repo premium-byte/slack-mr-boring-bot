@@ -3,17 +3,19 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron"
 	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/robfig/cron"
 	"github.com/slack-go/slack"
 )
 
@@ -25,9 +27,16 @@ var slackApi *slack.Client
 func main() {
 
 	_ = godotenv.Load()
-
 	slackToken := os.Getenv("SLACK_TOKEN")
 	slackApi = slack.New(slackToken)
+
+	r := gin.Default()
+	r.POST("/replace", func(c *gin.Context) {
+		fmt.Println("Hello Hello")
+		c.JSON(http.StatusOK, gin.H{
+			"message": "pong",
+		})
+	})
 
 	generalconfiguration = loadGeneralConfiguration()
 	currentSelectionStorage = loadCurrentSelectionStorage()
@@ -87,8 +96,10 @@ func main() {
 	}
 
 	wg.Wait()
-	// Keep the main function running indefinitely
-	select {}
+	err := r.Run(":9090")
+	if err != nil {
+		return
+	}
 }
 
 type SelectedTeams struct {
