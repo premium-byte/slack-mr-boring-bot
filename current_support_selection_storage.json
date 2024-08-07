@@ -1,16 +1,32 @@
 {
   "groups": {
+    "doninhas-group": {
+      "teams": {
+        "payments-iris-backend": [
+          "pedro.m.r.silva"
+        ],
+        "payments-zeus-backend": [
+          "pedro87silva"
+        ]
+      }
+    },
     "payments-support": {
       "teams": {
         "payments-iris-backend": [
-          "pedro87silva",
           "Y"
         ],
-        "payments-iris-frontend": [],
-        "payments-zeus-backend": [],
+        "payments-iris-frontend": [
+          "H",
+          "I",
+          "G"
+        ],
+        "payments-zeus-backend": [
+          "A",
+          "Z",
+          "B"
+        ],
         "payments-zeus-frontend": [
-          "E",
-          "pedro87silva"
+          "E"
         ]
       }
     }

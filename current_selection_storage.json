@@ -6,8 +6,15 @@
       }
     },
     "payments-zeus": {
+      "daily": {
+        "members": [
+          "Maria"
+        ]
+      },
       "support": {
-        "members": []
+        "members": [
+          "VelvetShadow"
+        ]
       }
     },
     "team1": {

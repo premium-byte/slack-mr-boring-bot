@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,36 +20,47 @@ import (
 	"github.com/slack-go/slack"
 )
 
-var generalconfiguration GeneralConfiguration
+var generalConfiguration GeneralConfiguration
 var currentSelectionStorage CurrentSelectionStorage
 var currentSupportSelectionStorage CurrentSupportSelectionStorage
 var slackApi *slack.Client
 
-func main() {
+type SlackCommand struct {
+	Token       string `form:"token" binding:"required"`
+	TeamID      string `form:"team_id" binding:"required"`
+	TeamDomain  string `form:"team_domain" binding:"required"`
+	ChannelID   string `form:"channel_id" binding:"required"`
+	ChannelName string `form:"channel_name" binding:"required"`
+	UserID      string `form:"user_id" binding:"required"`
+	UserName    string `form:"user_name" binding:"required"`
+	Command     string `form:"command" binding:"required"`
+	Text        string `form:"text"`
+	ResponseURL string `form:"response_url" binding:"required"`
+}
 
+type SimpleSlackCommand struct {
+	Command string `form:"command"`
+	Text    string `form:"text"`
+}
+
+func main() {
 	_ = godotenv.Load()
 	slackToken := os.Getenv("SLACK_TOKEN")
 	slackApi = slack.New(slackToken)
+	regex := `(selected|available)\s+(teams|groups)\s+([\p{L}\p{N}-]+)\s+([\p{L}\p{N}-]+)`
 
 	r := gin.Default()
-	r.POST("/replace", func(c *gin.Context) {
-		fmt.Println("Hello Hello")
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
 
-	generalconfiguration = loadGeneralConfiguration()
+	generalConfiguration = loadGeneralConfiguration()
 	currentSelectionStorage = loadCurrentSelectionStorage()
 	currentSupportSelectionStorage = loadCurrentSupportSelectionStorage()
 	defer saveSelectedUsers(currentSelectionStorage)
 
-	fmt.Println(generalconfiguration.Groups)
-
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for teamName, taskMap := range generalconfiguration.Teams {
+	log.Println("Starting to process Teams section...")
+	for teamName, taskMap := range generalConfiguration.Teams {
 		for taskName, task := range taskMap {
 			wg.Add(1)
 			go func(teamName string, taskName string, task Task) {
@@ -63,7 +75,7 @@ func main() {
 				})
 
 				if err != nil {
-					fmt.Println("Error scheduling task:", err)
+					log.Println("Error scheduling task:", err)
 					return
 				}
 
@@ -72,8 +84,8 @@ func main() {
 		}
 	}
 
-	fmt.Println("Groups", generalconfiguration.Groups)
-	for supportName, supportDefinition := range generalconfiguration.Groups {
+	log.Println("Starting to process Groups section...")
+	for supportName, supportDefinition := range generalConfiguration.Groups {
 		wg.Add(1)
 		go func(supportName string, supportDefinition SupportDefinition) {
 			defer wg.Done()
@@ -87,7 +99,7 @@ func main() {
 			})
 
 			if err != nil {
-				fmt.Println("Error scheduling Support:", err)
+				log.Println("Error scheduling Support:", err)
 				return
 			}
 
@@ -96,36 +108,179 @@ func main() {
 	}
 
 	wg.Wait()
+
+	r.POST("/replace", func(c *gin.Context) {
+		var command SlackCommand
+		if err := c.ShouldBind(&command); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		rs := regexp.MustCompile(regex)
+		var matches = rs.FindAllStringSubmatch(command.Text, -1)
+		var username string
+		var teamType string
+		var teamOrGroup string
+		var teamMeeting string
+		for _, match := range matches {
+			username = match[1]
+			teamType = match[2]
+			teamOrGroup = match[3]
+			teamMeeting = match[4]
+		}
+
+		newMember := replaceUser(username, teamType, teamOrGroup, teamMeeting)
+
+		log.Println("Text :: " + command.Text)
+		log.Println("Command :: " + command.Command)
+		log.Println("New Member :: " + newMember)
+		c.JSON(http.StatusOK, gin.H{
+			"response_type": "in_channel",
+			"text":          "It's your turn, " + newMember,
+		})
+	})
+
+	r.POST("/show", func(c *gin.Context) {
+		var command SimpleSlackCommand
+		if err := c.ShouldBind(&command); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		rs := regexp.MustCompile(regex)
+		var matches = rs.FindAllStringSubmatch(command.Text, -1)
+		var operationType string
+		var teamType string
+		var teamOrGroup string
+		var teamMeeting string
+		for _, match := range matches {
+			operationType = match[1]
+			teamType = match[2]
+			teamOrGroup = match[3]
+			teamMeeting = match[4]
+		}
+
+		users := showUsers(operationType, teamType, teamOrGroup, teamMeeting)
+
+		log.Println("Text :: " + command.Text)
+		log.Println("Command :: " + command.Command)
+		log.Println("Users :: " + strings.Join(users, ", "))
+		c.JSON(http.StatusOK, gin.H{
+			"response_type": "in_channel",
+			"text":          strings.Join(users, ", "),
+		})
+	})
+
 	err := r.Run(":9090")
 	if err != nil {
 		return
 	}
 }
 
-type SelectedTeams struct {
-	Users map[string]bool `json:"users"`
+/**
+ * @param username - pedro
+ * @param replaceType - teams or groups
+ * @param teamOrGroup - payments-zeus or payments-zeus
+ * @param teamMeeting - daily
+ */
+func replaceUser(username string, teamType string, teamOrGroup string, teamMeeting string) string {
+	if "teams" == teamType {
+		currentSelectionMembers := currentSelectionStorage.Teams[teamOrGroup][teamMeeting].Members
+		if len(currentSelectionMembers) == 0 {
+			log.Printf("Not members to replace for team %s", teamOrGroup)
+			return "nobody"
+		}
+
+		generalConfigurationMembers := generalConfiguration.Teams[teamOrGroup][teamMeeting].Members
+
+		var newMember string
+		availableMembers := Difference(generalConfigurationMembers, currentSelectionMembers)
+		if len(availableMembers) == 0 {
+			log.Printf("Not enough members to select for team %s", teamOrGroup)
+			Shuffle(generalConfigurationMembers)
+			newMember = generalConfigurationMembers[0]
+		}
+
+		Shuffle(availableMembers)
+		newMember = availableMembers[0]
+
+		replaceMemberToCurrentSelectionStorage(teamOrGroup, teamMeeting, newMember, username)
+		return newMember
+	}
+
+	if "groups" == teamType {
+		currentSelectionMembers := currentSupportSelectionStorage.Groups[teamOrGroup].Teams[teamMeeting]
+		if len(currentSelectionMembers) == 0 {
+			log.Printf("Not members to replace for team %s", teamOrGroup)
+			return "nobody"
+		}
+
+		generalConfigurationMembers := generalConfiguration.Groups[teamOrGroup].Teams[teamMeeting].Members
+
+		var newMember string
+		availableMembers := Difference(generalConfigurationMembers, currentSelectionMembers)
+		if len(availableMembers) == 0 {
+			log.Printf("Not enough members to select for team %s", teamOrGroup)
+			Shuffle(generalConfigurationMembers)
+			newMember = generalConfigurationMembers[0]
+		}
+
+		Shuffle(availableMembers)
+		newMember = availableMembers[0]
+
+		replaceMemberToCurrentSupportSelectionStorage(username, teamOrGroup, teamMeeting, newMember)
+		return newMember
+	}
+
+	return "nobody"
 }
 
-type SelectedUsers struct {
-	Teams []TeamSelected `json:"teams"`
-}
+/**
+ * @param username - pedro
+ * @param replaceType - teams or groups
+ * @param teamOrGroup - payments-zeus or payments-zeus
+ * @param teamMeeting - daily
+ */
+func showUsers(operationType string, teamType string, teamOrGroup string, teamMeeting string) []string {
+	if "selected" == operationType {
+		if "teams" == teamType {
+			return currentSelectionStorage.Teams[teamOrGroup][teamMeeting].Members
+		}
 
-type TeamSelected struct {
-	Name    string   `json:"name"`
-	Members []string `json:"members"`
+		if "groups" == teamType {
+			return currentSupportSelectionStorage.Groups[teamOrGroup].Teams[teamMeeting]
+		}
+	}
+
+	if "available" == operationType {
+		if "teams" == teamType {
+			currentSelectionMembers := currentSelectionStorage.Teams[teamOrGroup][teamMeeting].Members
+			generalConfigurationMembers := generalConfiguration.Teams[teamOrGroup][teamMeeting].Members
+
+			return Difference(generalConfigurationMembers, currentSelectionMembers)
+		}
+
+		if "groups" == teamType {
+			currentSelectionMembers := currentSupportSelectionStorage.Groups[teamOrGroup].Teams[teamMeeting]
+			generalConfigurationMembers := generalConfiguration.Groups[teamOrGroup].Teams[teamMeeting].Members
+
+			return Difference(generalConfigurationMembers, currentSelectionMembers)
+		}
+	}
+
+	return []string{}
 }
 
 // saveSelectedUsers saves the selected users to a file
 func saveSelectedUsers(currentSelectionStorage CurrentSelectionStorage) {
 	data, err := json.MarshalIndent(currentSelectionStorage, "", "  ")
 	if err != nil {
-		fmt.Println("Error marshalling selected users:", err)
+		log.Println("Error marshalling selected users:", err)
 		return
 	}
 
 	err = os.WriteFile("current_selection_storage.json", data, 0644)
 	if err != nil {
-		fmt.Println("Error writing selected users to file:", err)
+		log.Println("Error writing selected users to file:", err)
 		return
 	}
 }
@@ -134,20 +289,22 @@ func saveSelectedUsers(currentSelectionStorage CurrentSelectionStorage) {
 func saveSupportedSelectedUsers(currentSupportSelectionStorage CurrentSupportSelectionStorage) {
 	data, err := json.MarshalIndent(currentSupportSelectionStorage, "", "  ")
 	if err != nil {
-		fmt.Println("Error marshalling selected users:", err)
+		log.Println("Error marshalling selected users:", err)
 		return
 	}
 
 	err = os.WriteFile("current_support_selection_storage.json", data, 0644)
 	if err != nil {
-		fmt.Println("Error writing selected users to file:", err)
+		log.Println("Error writing selected users to file:", err)
 		return
 	}
 }
 
 func selectUsersForSupport(supportName string, supportDefinition SupportDefinition) {
-	fmt.Println("Selecting users for support --> ", supportName)
+	log.Println("Selecting users for support --> ", supportName)
+	// TODO PS - Add validation for the empty scenarios
 
+	userNames := []string{}
 	users := make(map[string][]string, len(supportDefinition.Teams))
 	for teamName, teamDefinition := range supportDefinition.Teams {
 
@@ -164,7 +321,7 @@ func selectUsersForSupport(supportName string, supportDefinition SupportDefiniti
 		availableMembers := Difference(teamDefinition.Members, currentSupportSelectionStorage.Groups[supportName].Teams[teamName])
 		if len(availableMembers) < teamDefinition.Amount {
 			log.Printf("Not enough members to select for support %s", supportName)
-			fmt.Println("Not enough users to select. Resetting...")
+			log.Println("Not enough users to select. Resetting...")
 			currentSupportSelectionStorage.Groups[supportName].Teams[teamName] = []string{}
 			saveSupportedSelectedUsers(currentSupportSelectionStorage) // clean selection
 			selectUsersForSupport(supportName, supportDefinition)
@@ -175,14 +332,15 @@ func selectUsersForSupport(supportName string, supportDefinition SupportDefiniti
 
 		selectedMembers := availableMembers[:teamDefinition.Amount]
 		users[teamName] = selectedMembers
+		userNames = append(userNames, selectedMembers...)
 	}
 
 	var builder strings.Builder
 
-	var counter int = 0
+	var counter = 0
 	for _, selectedUsers := range users {
 
-		var counter2 int = 0
+		var counter2 = 0
 		for _, user := range selectedUsers {
 			if counter != len(users)-1 {
 				builder.WriteString("<@" + user + ">, ")
@@ -203,36 +361,41 @@ func selectUsersForSupport(supportName string, supportDefinition SupportDefiniti
 
 	}
 
-	fmt.Println("Selected users for support {} :: {}", supportName, builder.String())
+	log.Println("Selected users for support {} :: {}", supportName, builder.String())
 	message := getMessageToPublish(supportDefinition.Message, supportName)
 	sendMessageToSlack(message, builder.String(), supportDefinition.Channel, supportName)
 	addMemberToCurrentSupportSelectionStorage(supportName, users)
+	updateSlackGroup(userNames, supportName) // TODO PS - Add condition for empty channel
 }
 
 func selectUserForTask(teamName string, taskName string) {
-	fmt.Println("Selecting user for task", taskName)
+	log.Println("Selecting user for task", taskName)
 
-	teamMembers := generalconfiguration.Teams[teamName][taskName].Members
-	membersToSelect := generalconfiguration.Teams[teamName][taskName].Amount
+	teamMembers := generalConfiguration.Teams[teamName][taskName].Members
+	membersToSelect := generalConfiguration.Teams[teamName][taskName].Amount
+	if membersToSelect == 0 {
+		log.Println("No members to select for task ", taskName)
+		return
+	}
 
 	if len(teamMembers) < membersToSelect {
-		log.Printf("Not enough members to select for task %s", taskName)
+		log.Println("Not enough members to select for task ", taskName)
 		return
 	}
 
 	if membersToSelect == 0 {
-		log.Printf("No members to select for task %s", taskName)
+		log.Println("No members to select for task ", taskName)
 		return
 	}
 
 	counter := 0
-	listOfUsers := []string{}
+	var listOfUsers []string
 	currentSelectedMembers := currentSelectionStorage.Teams[teamName][taskName].Members
 	availableMembers := Difference(teamMembers, currentSelectedMembers)
 
 	Shuffle(availableMembers)
 	for _, member := range availableMembers {
-		fmt.Printf("[%s] :: %s selected user %s \n", teamName, taskName, member)
+		log.Printf("[%s] :: %s selected user %s \n", teamName, taskName, member)
 		listOfUsers = append(listOfUsers, member)
 
 		counter++
@@ -245,14 +408,14 @@ func selectUserForTask(teamName string, taskName string) {
 
 		for _, member := range listOfUsers {
 			addMemberToCurrentSelectionStorage(teamName, taskName, member)
-			taskInfo := generalconfiguration.Teams[teamName][taskName]
+			taskInfo := generalConfiguration.Teams[teamName][taskName]
 			sendMessageToSlack(taskInfo.Message, member, taskInfo.Channel, taskName)
 		}
 		return
 	}
 
 	// else if counter < membersToSelect
-	fmt.Println("Not enough users to select. Resetting...")
+	log.Println("Not enough users to select for task {}. Resetting...", taskName)
 	teamTask := currentSelectionStorage.Teams[teamName][taskName]
 	teamTask.Members = []string{}
 	currentSelectionStorage.Teams[teamName][taskName] = teamTask
@@ -286,14 +449,12 @@ func Difference(A, B []string) []string {
 }
 
 func sendMessageToSlack(slackMessage string, member string, channel string, taskName string) {
+	if channel == "" {
+		log.Println("Channel is empty, skipping sending message to Slack")
+		return
+	}
+
 	messageToPublish := getMessageToPublish(slackMessage, taskName)
-
-	// WORKING: Get user by email
-	//_, err := slackApi.GetUserByEmail(member)
-	//if err != nil {
-	//	log.Fatalf("Failed to find user: %v", err)
-	//}
-
 	messageToPublish = strings.Replace(messageToPublish, "{{name}}", member, -1)
 
 	_, _, err := slackApi.PostMessage(
@@ -302,9 +463,64 @@ func sendMessageToSlack(slackMessage string, member string, channel string, task
 		slack.MsgOptionAsUser(true),
 	)
 	if err != nil {
-		fmt.Printf("Error sending message to Slack: %s\n", err)
+		log.Printf("Error sending message to Slack: %s\n", err)
 		return
 	}
+}
+
+func updateSlackGroup(users []string, groupName string) {
+	userGroups, err := slackApi.GetUserGroups(slack.GetUserGroupsOptionIncludeUsers(true))
+	if err != nil {
+		return
+	}
+
+	foundGroup := false
+	groupId := ""
+	for _, userGroup := range userGroups {
+		if groupName == userGroup.Name {
+			foundGroup = true
+			groupId = userGroup.ID
+		}
+	}
+
+	if !foundGroup {
+		log.Println("Could not find any group with the name: ", groupName)
+		return
+	}
+
+	userIds, _ := getUserIDsFromNames(users)
+	_, err = slackApi.UpdateUserGroupMembers(groupId, strings.Join(userIds, ","))
+	if err != nil {
+		log.Printf("failed to remove user from group: %w", err)
+		return
+	}
+}
+
+func getUserIDsFromNames(userNames []string) ([]string, error) {
+	var userIDs []string
+
+	// List all users to find their IDs by their names
+	users, err := slackApi.GetUsers()
+	if err != nil {
+		return nil, err
+	}
+
+	// Map user names to user IDs
+	userNameToID := make(map[string]string)
+	for _, user := range users {
+		userNameToID[user.Name] = user.ID
+	}
+
+	// Convert user names to user IDs
+	for _, userName := range userNames {
+		userID, ok := userNameToID[userName]
+		if !ok {
+			return nil, fmt.Errorf("user %s not found", userName)
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	return userIDs, nil
 }
 
 func getMessageToPublish(teamTaskMessage string, taskName string) string {
@@ -312,7 +528,7 @@ func getMessageToPublish(teamTaskMessage string, taskName string) string {
 		return teamTaskMessage
 	}
 
-	return generalconfiguration.Messages[taskName]
+	return generalConfiguration.Messages[taskName]
 }
 
 func getCronExpression(cronExpression string) string {
@@ -320,7 +536,7 @@ func getCronExpression(cronExpression string) string {
 		return cronExpression
 	}
 
-	return generalconfiguration.DefaultCron
+	return generalConfiguration.DefaultCron
 }
 
 func addMemberToCurrentSelectionStorage(team string, task string, member string) {
@@ -338,6 +554,26 @@ func addMemberToCurrentSelectionStorage(team string, task string, member string)
 	teamTask.Members = append(teamTask.Members, member)
 	// Add member to the existing task
 	currentSelectionStorage.Teams[team][task] = teamTask
+
+	saveSelectedUsers(currentSelectionStorage)
+}
+
+func replaceMemberToCurrentSelectionStorage(team string, task string, member string, memberToReplace string) {
+	if _, ok := currentSelectionStorage.Teams[team]; !ok {
+		currentSelectionStorage.Teams[team] = make(map[string]TaskSelection)
+	}
+
+	if _, ok := currentSelectionStorage.Teams[team][task]; !ok {
+		currentSelectionStorage.Teams[team][task] = TaskSelection{
+			Members: []string{},
+		}
+	}
+
+	for i, element := range currentSelectionStorage.Teams[team][task].Members {
+		if memberToReplace == element {
+			currentSelectionStorage.Teams[team][task].Members[i] = member
+		}
+	}
 
 	saveSelectedUsers(currentSelectionStorage)
 }
@@ -363,6 +599,17 @@ func addMemberToCurrentSupportSelectionStorage(supportTeam string, users map[str
 	saveSupportedSelectedUsers(currentSupportSelectionStorage)
 }
 
+func replaceMemberToCurrentSupportSelectionStorage(username string, teamOrGroup string, teamMeeting string, newMember string) {
+
+	for i, member := range currentSupportSelectionStorage.Groups[teamOrGroup].Teams[teamMeeting] {
+		if username == member {
+			currentSupportSelectionStorage.Groups[teamOrGroup].Teams[teamMeeting][i] = newMember
+		}
+	}
+
+	saveSupportedSelectedUsers(currentSupportSelectionStorage)
+}
+
 func loadGeneralConfiguration() GeneralConfiguration {
 
 	files, err := ioutil.ReadDir(".")
@@ -377,7 +624,7 @@ func loadGeneralConfiguration() GeneralConfiguration {
 	var generalConfiguration GeneralConfiguration
 	file, err := os.Open("configuration.json")
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		log.Println("Error opening file:", err)
 		// File does not exist or error reading the file, return empty structure
 		return GeneralConfiguration{Teams: make(map[string]map[string]Task)}
 	}
@@ -386,14 +633,14 @@ func loadGeneralConfiguration() GeneralConfiguration {
 	data, err := io.ReadAll(file)
 	if err != nil {
 		// Error reading file, return empty structure
-		fmt.Println("Error reading file:", err)
+		log.Println("Error reading file:", err)
 		return GeneralConfiguration{Teams: make(map[string]map[string]Task)}
 	}
 
 	err = json.Unmarshal(data, &generalConfiguration)
 	if err != nil {
 		// Error parsing JSON, return empty structure
-		fmt.Println("Error parsing JSON:", err)
+		log.Println("Error parsing JSON:", err)
 		return GeneralConfiguration{Teams: make(map[string]map[string]Task)}
 	}
 
@@ -449,7 +696,7 @@ func loadCurrentSelectionStorage() CurrentSelectionStorage {
 	var currentSelectionStorage CurrentSelectionStorage
 	file, err := os.Open("current_selection_storage.json")
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		log.Println("Error opening file:", err)
 		// File does not exist or error reading the file, return empty structure
 		return CurrentSelectionStorage{Teams: make(map[string]map[string]TaskSelection)}
 	}
@@ -458,14 +705,14 @@ func loadCurrentSelectionStorage() CurrentSelectionStorage {
 	data, err := io.ReadAll(file)
 	if err != nil {
 		// Error reading file, return empty structure
-		fmt.Println("Error reading file:", err)
+		log.Println("Error reading file:", err)
 		return CurrentSelectionStorage{Teams: make(map[string]map[string]TaskSelection)}
 	}
 
 	err = json.Unmarshal(data, &currentSelectionStorage)
 	if err != nil {
 		// Error parsing JSON, return empty structure
-		fmt.Println("Error parsing JSON:", err)
+		log.Println("Error parsing JSON:", err)
 		return CurrentSelectionStorage{Teams: make(map[string]map[string]TaskSelection)}
 	}
 
@@ -477,7 +724,7 @@ func loadCurrentSupportSelectionStorage() CurrentSupportSelectionStorage {
 	var currentSelectionStorage CurrentSupportSelectionStorage
 	file, err := os.Open("current_support_selection_storage.json")
 	if err != nil {
-		fmt.Println("Error opening file:", err)
+		log.Println("Error opening file:", err)
 		// File does not exist or error reading the file, return empty structure
 		return CurrentSupportSelectionStorage{Groups: make(map[string]StoredSupportDefinition)}
 	}
@@ -486,14 +733,14 @@ func loadCurrentSupportSelectionStorage() CurrentSupportSelectionStorage {
 	data, err := io.ReadAll(file)
 	if err != nil {
 		// Error reading file, return empty structure
-		fmt.Println("Error reading file:", err)
+		log.Println("Error reading file:", err)
 		return CurrentSupportSelectionStorage{Groups: make(map[string]StoredSupportDefinition)}
 	}
 
 	err = json.Unmarshal(data, &currentSelectionStorage)
 	if err != nil {
 		// Error parsing JSON, return empty structure
-		fmt.Println("Error parsing JSON:", err)
+		log.Println("Error parsing JSON:", err)
 		return CurrentSupportSelectionStorage{Groups: make(map[string]StoredSupportDefinition)}
 	}
 

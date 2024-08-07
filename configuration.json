@@ -15,7 +15,8 @@
                     "Maria"
                 ],
                 "message": "",
-                "channel": "mysuperchannel"
+                "channel": "mysuperchannel",
+                "amount": 1
             },
             "support": {
                 "cron": "0 0 9 * * 1-5",
@@ -78,6 +79,22 @@
                 },
                 "payments-iris-frontend": {
                     "members" : ["G", "H", "I"],
+                    "amount": 1
+                }
+            },
+            "message": ":mega: *Exciting News!* :mega:\n\nToday, we're thrilled to announce that our amazing support squad will be led by none other than {{name}}! :star2:\n\nThese superheroes are ready to tackle any challenge and make your day smoother and brighter. :woman_superhero: :man_superhero: :woman_superhero:\n\nFeel free to reach out to them for any assistance you need. They're here to help and spread some joy along the way! :smile: :+1: :sparkles:\n\nLet's give a big round of applause to {{name}}! :clap: :clap: :clap:\n\n#SupportTeam #HeroesOfTheDay #HereToHelp\n\n:rocket: :balloon: :blush:",
+            "channel": "mysupportchannel"
+        },
+        "doninhas-group": {
+            "amountFromEachTeam": 1,
+            "cron": "0 */2 * * * *",
+            "teams": {
+                "payments-zeus-backend": {
+                    "members" : ["pedro87silva"],
+                    "amount": 1
+                },
+                "payments-iris-backend": {
+                    "members" : ["pedro.m.r.silva"],
                     "amount": 1
                 }
             },
