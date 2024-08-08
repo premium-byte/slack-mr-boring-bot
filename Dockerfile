@@ -16,7 +16,7 @@ COPY . .
 RUN ls -la
 
 # Build the Go app
-RUN go build -o main .
+RUN go build -o main ./cmd/mr-boring
 
 # Start a new stage from scratch
 FROM alpine:latest
@@ -24,10 +24,12 @@ FROM alpine:latest
 # Set the Current Working Directory inside the container
 WORKDIR /root/
 
-# Copy the Pre-built binary file from the previous stage
+# Copy the Pre-built binary file and necessary files from the previous stage
 COPY --from=builder /app/configuration.json .
 COPY --from=builder /app/current_selection_storage.json .
+COPY --from=builder /app/current_support_selection_storage.json .
 COPY --from=builder /app/main .
+
 
 # Set environment variables
 ENV APP_NAME="MyApp"

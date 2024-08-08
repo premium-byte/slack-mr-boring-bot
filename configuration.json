@@ -87,7 +87,7 @@
         },
         "doninhas-group": {
             "amountFromEachTeam": 1,
-            "cron": "0 */2 * * * *",
+            "cron": "0 0 9 * * 1-5",
             "teams": {
                 "payments-zeus-backend": {
                     "members" : ["pedro87silva"],
